@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Omniverse/Isaac Sim
+*.log
+*.tmp
+*.cache
+_build/
+_render/
+
+# OS
+Thumbs.db
+.DS_Store
+*.bak
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+# Documentation files
+HOW_EXTENSION_WORKS.md
+TROUBLESHOOTING.md
+
+# Large asset files (download separately)
+scenes/*.glb

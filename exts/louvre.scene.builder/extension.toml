@@ -1,0 +1,16 @@
+[package]
+version = "1.0.0"
+title = "Louvre Scene Builder"
+description = "Build Louvre museum scene with RidgebackFranka robot"
+authors = ["rokey"]
+category = "Simulation"
+keywords = ["louvre", "robot", "scene", "isaac sim"]
+
+[dependencies]
+"omni.kit.uiapp" = {}
+"omni.isaac.core" = {}
+"omni.isaac.ui" = {}
+"omni.usd" = {}
+
+[[python.module]]
+name = "louvre.scene.builder"
