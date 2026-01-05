@@ -28,8 +28,10 @@ import carb
 class LouvreSceneBuilderExtension(omni.ext.IExt):
     """Extension to build Louvre museum scene"""
     
-    # Asset paths (absolute paths for reliability)
-    ENV_SET_DIR = Path("/home/rokey/louvre_extension_minimal")
+    # Asset paths (relative to extension location for portability)
+    # extension.py 위치: exts/louvre.scene.builder/louvre/scene/builder/
+    # ENV_SET_DIR 위치: 프로젝트 루트 (5단계 상위)
+    ENV_SET_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
     # GLB 파일 직접 사용 - 텍스처가 임베드되어 있음!
     LOUVRE_GLB = str(ENV_SET_DIR / "scenes" / "lubre.glb")
     ROBOT_USD = str(ENV_SET_DIR / "assets" / "robots" / "RidgebackFranka" / "ridgeback_franka.usd")

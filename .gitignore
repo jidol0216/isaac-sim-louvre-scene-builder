@@ -40,9 +40,18 @@ Thumbs.db
 temp/
 tmp/
 
-# Documentation files
-HOW_EXTENSION_WORKS.md
-TROUBLESHOOTING.md
+
 
 # Large asset files (download separately)
 scenes/*.glb
+
+# Generated files
+*.gv
+*.pdf
+maps/
+map*.png
+map*.yaml
+
+# Documentation (kept separate)
+HOW_EXTENSION_WORKS.md
+TROUBLESHOOTING.md
