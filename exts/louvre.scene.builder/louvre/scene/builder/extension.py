@@ -17,10 +17,9 @@ Usage:
 
 import omni.ext
 import omni.ui as ui
-import omni.kit.commands
 from omni.isaac.core import World
 from omni.isaac.core.utils.stage import add_reference_to_stage
-from pxr import Usd, UsdGeom, UsdPhysics, UsdLux, UsdShade, PhysxSchema, Gf, Sdf
+from pxr import Usd, UsdGeom, UsdPhysics, UsdLux, PhysxSchema, Gf, Sdf
 from pathlib import Path
 import carb
 
@@ -47,7 +46,6 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
     
     # Save path
     SAVE_PATH = str(ENV_SET_DIR / "scenes" / "louvre_complete_scene.usd")
-    GRAPH_SAVE_PATH = str(ENV_SET_DIR / "scenes" / "louvre_camera_graphs.usd")
     TRASH_USDZ_DIR = str(ENV_SET_DIR / "usdz_only")
     
     def on_startup(self, ext_id):
@@ -98,21 +96,9 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
         """Called when extension shuts down"""
         print("[LouvreSceneBuilder] Extension shutdown")
         
-        # Clean up synthetic data graphs before shutdown
-        self._cleanup_synthetic_data_graphs()
-        
         if self._window:
             self._window.destroy()
             self._window = None
-    
-    def _cleanup_synthetic_data_graphs(self):
-        """Clean up synthetic data render graphs to prevent errors"""
-        try:
-            import omni.syntheticdata
-            # Synthetic data cleanup (optional, may not be needed)
-            pass
-        except Exception as e:
-            pass
     
     def _update_status(self, msg: str, success: bool = True):
         """Update status label"""
@@ -123,12 +109,6 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
     
     def _reset_scene(self):
         """Reset the scene"""
-        import omni.usd
-        
-        # Clean up synthetic data graphs before reset
-        self._cleanup_synthetic_data_graphs()
-        
-        # Small delay to ensure cleanup
         import asyncio
         asyncio.ensure_future(self._reset_scene_async())
     
@@ -728,21 +708,3 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
                 
         except Exception as e:
             self._update_status(f"❌ Clear error: {str(e)}", success=False)
-
-    def _add_convex_collision_recursive(self, stage, prim):
-        """Add ConvexHull collision to all mesh children"""
-        from pxr import UsdGeom, UsdPhysics, PhysxSchema
-        
-        for child in Usd.PrimRange(prim):
-            if child.IsA(UsdGeom.Mesh):
-                # Add collision API
-                if not child.HasAPI(UsdPhysics.CollisionAPI):
-                    UsdPhysics.CollisionAPI.Apply(child)
-                
-                # Set mesh collision API with convex hull approximation
-                if not child.HasAPI(UsdPhysics.MeshCollisionAPI):
-                    mesh_collision = UsdPhysics.MeshCollisionAPI.Apply(child)
-                    mesh_collision.CreateApproximationAttr().Set("convexHull")
-                else:
-                    mesh_collision = UsdPhysics.MeshCollisionAPI(child)
-                    mesh_collision.CreateApproximationAttr().Set("convexHull")
