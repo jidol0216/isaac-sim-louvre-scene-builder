@@ -23,12 +23,25 @@ ENV/
 *~
 .DS_Store
 
+# ROS
+install/
+log/
+build/
+COLCON_IGNORE
+
 # Omniverse/Isaac Sim
 *.log
 *.tmp
 *.cache
 _build/
 _render/
+
+# USD files (keep only essential ones)
+scenes/*.usd
+!scenes/louvre_complete_scene.usd
+
+# Trash objects (too large)
+usdz_only/
 
 # OS
 Thumbs.db
@@ -39,8 +52,6 @@ Thumbs.db
 *.tmp
 temp/
 tmp/
-
-
 
 # Large asset files (download separately)
 scenes/*.glb
@@ -55,3 +66,4 @@ map*.yaml
 # Documentation (kept separate)
 HOW_EXTENSION_WORKS.md
 TROUBLESHOOTING.md
+

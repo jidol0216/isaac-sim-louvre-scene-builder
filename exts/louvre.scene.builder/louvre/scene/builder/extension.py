@@ -48,12 +48,13 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
     # Save path
     SAVE_PATH = str(ENV_SET_DIR / "scenes" / "louvre_complete_scene.usd")
     GRAPH_SAVE_PATH = str(ENV_SET_DIR / "scenes" / "louvre_camera_graphs.usd")
+    TRASH_USDZ_DIR = str(ENV_SET_DIR / "usdz_only")
     
     def on_startup(self, ext_id):
         """Called when extension starts"""
         print("[LouvreSceneBuilder] Extension startup")
         
-        self._window = ui.Window("Louvre Scene Builder", width=300, height=300)
+        self._window = ui.Window("Louvre Scene Builder", width=300, height=400)
         with self._window.frame:
             with ui.VStack(spacing=10):
                 ui.Label("Louvre Museum Scene Builder", height=30, 
@@ -74,6 +75,19 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
                 
                 ui.Button("Reset Scene", height=30,
                          clicked_fn=self._reset_scene)
+                
+                ui.Spacer(height=10)
+                
+                ui.Label("━━━ Trash Spawner ━━━", height=20,
+                        style={"font_size": 14, "color": 0xFFFFAA00})
+                
+                ui.Button("🗑️ Spawn Random Trash", height=40,
+                         clicked_fn=lambda: self._spawn_random_trash(),
+                         style={"background_color": 0xFFCC6600})
+                
+                ui.Button("🧹 Clear All Trash", height=30,
+                         clicked_fn=lambda: self._clear_all_trash(),
+                         style={"background_color": 0xFF666666})
                 
                 ui.Spacer()
                 
@@ -162,95 +176,6 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
             self._update_status(f"❌ Load error: {str(e)}", success=False)
             carb.log_error(f"[LouvreSceneBuilder] Load error: {e}")
     
-    def _reinitialize_synthetic_data(self):
-        """Reinitialize synthetic data after loading scene"""
-        try:
-            import omni.syntheticdata
-            sd_interface = omni.syntheticdata._syntheticdata.acquire_syntheticdata_interface()
-            if sd_interface:
-                # Clear and re-register annotators
-                sd_interface.clear_registered_annotators()
-            print("  ✅ Synthetic data reinitialized")
-        except Exception as e:
-            print(f"  ⚠️  Synthetic data reinit: {e}")
-    
-    def _save_graphs_only(self):
-        """GUI에서 만든 OmniGraph를 별도 USD 파일로 저장"""
-        try:
-            import omni.usd
-            from pxr import Usd, Sdf, UsdUtils
-            
-            context = omni.usd.get_context()
-            stage = context.get_stage()
-            
-            if not stage:
-                self._update_status("❌ No stage", success=False)
-                return
-            
-            self._update_status("💾 Saving graphs...")
-            
-            # 모든 graph prim 경로 찾기
-            graph_paths = []
-            for prim in stage.Traverse():
-                prim_path = str(prim.GetPath())
-                # Render graph 또는 ActionGraph만
-                if prim_path.startswith("/Render") or prim_path.startswith("/ActionGraph"):
-                    # 최상위 레벨만
-                    parent_path = str(prim.GetParent().GetPath())
-                    if parent_path == "/" or parent_path.startswith("/Render"):
-                        if prim_path not in graph_paths:
-                            graph_paths.append(prim_path)
-            
-            if not graph_paths:
-                self._update_status("❌ No graphs found", success=False)
-                print("  ℹ️  No /Render or /ActionGraph found")
-                return
-            
-            print(f"  📊 Saving {len(graph_paths)} graph hierarchies:")
-            for path in graph_paths:
-                print(f"    - {path}")
-            
-            # Flatten 방식으로 export (특정 prim만)
-            # 새 stage 만들고 해당 prim만 복사
-            export_stage = Usd.Stage.CreateNew(self.GRAPH_SAVE_PATH)
-            
-            for graph_path in graph_paths:
-                src_prim = stage.GetPrimAtPath(graph_path)
-                if src_prim and src_prim.IsValid():
-                    # Flatten된 형태로 복사
-                    UsdUtils.FlattenLayerStack(stage, graph_path)
-                    
-                    # 해당 prim 트리 전체를 export stage로 복사
-                    export_prim = export_stage.OverridePrim(graph_path)
-                    for src_child in Usd.PrimRange(src_prim):
-                        child_path = src_child.GetPath()
-                        dest_prim = export_stage.OverridePrim(child_path)
-                        dest_prim.SetTypeName(src_child.GetTypeName())
-            
-            export_stage.GetRootLayer().Export(self.GRAPH_SAVE_PATH)
-            
-            self._update_status(f"✅ {len(graph_paths)} graphs saved")
-            print(f"[LouvreSceneBuilder] Graphs saved to: {self.GRAPH_SAVE_PATH}")
-            
-        except Exception as e:
-            self._update_status(f"❌ Graph save error: {str(e)}", success=False)
-            carb.log_error(f"[LouvreSceneBuilder] Graph save error: {e}")
-    
-    def _load_camera_graphs(self, stage):
-        """저장된 camera graph 불러오기"""
-        import os
-        try:
-            if not os.path.exists(self.GRAPH_SAVE_PATH):
-                print("  ℹ️  No saved graphs found")
-                return
-            
-            # Graph USD를 reference로 추가
-            add_reference_to_stage(usd_path=self.GRAPH_SAVE_PATH, prim_path="/CameraGraphs")
-            print(f"  ✅ Camera graphs loaded from: {self.GRAPH_SAVE_PATH}")
-            
-        except Exception as e:
-            print(f"  ⚠️  Graph load: {e}")
-    
     def _save_scene(self):
         """Save the current scene (reference 방식 - graph 보존)"""
         try:
@@ -275,33 +200,6 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
         except Exception as e:
             self._update_status(f"❌ Save error: {str(e)}", success=False)
             carb.log_error(f"[LouvreSceneBuilder] Save error: {e}")
-    
-    def _remove_all_render_graphs(self, stage):
-        """Remove all OmniGraph render graphs before saving"""
-        try:
-            import omni.graph.core as og
-            
-            # Get all graphs in the scene
-            graphs = og.get_all_graphs()
-            prims_to_remove = []
-            
-            for graph in graphs:
-                graph_path = graph.get_path_to_graph()
-                # Remove synthetic data related graphs
-                if any(keyword in graph_path for keyword in 
-                       ["/Render", "/RenderProduct", "Synthetic", "annotator", "PostProcess"]):
-                    prims_to_remove.append(graph_path)
-                    print(f"  🗑️  Removing graph: {graph_path}")
-            
-            # Remove the prims
-            for path in prims_to_remove:
-                if stage.GetPrimAtPath(path):
-                    stage.RemovePrim(path)
-            
-            print(f"  ✅ Removed {len(prims_to_remove)} render graphs")
-        
-        except Exception as e:
-            print(f"  ⚠️  Graph removal: {e}")
     
     def _build_scene(self):
         """Build the complete Louvre scene"""
@@ -680,55 +578,6 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
         
         print("  ✅ LiDAR sensors added")
     
-    def _disable_camera_auto_render(self, stage, camera_root_path):
-        """Disable automatic rendering to prevent frame drops"""
-        try:
-            camera_prim = stage.GetPrimAtPath(camera_root_path)
-            if not camera_prim.IsValid():
-                return
-            
-            # Find all Camera prims and disable them
-            for prim in Usd.PrimRange(camera_prim):
-                if prim.IsA(UsdGeom.Camera):
-                    # Make camera inactive during play (enable manually when needed)
-                    prim.SetActive(False)
-                    print(f"    📷 Camera disabled for auto-render: {prim.GetPath()}")
-            
-            print("    ✅ Camera auto-rendering disabled (use manual capture)")
-            
-        except Exception as e:
-            print(f"    ⚠️  Camera disable: {e}")
-    
-    def _optimize_camera_rendering(self, stage, camera_root_path):
-        """Optimize camera rendering to reduce frame drops"""
-        try:
-            import omni.replicator.core as rep
-            
-            # Find camera prims
-            camera_prim = stage.GetPrimAtPath(camera_root_path)
-            if not camera_prim.IsValid():
-                return
-            
-            # Lower resolution for better performance
-            for prim in Usd.PrimRange(camera_prim):
-                if prim.IsA(UsdGeom.Camera):
-                    # Set lower resolution
-                    camera = UsdGeom.Camera(prim)
-                    # Default RealSense is 1280x720, reduce to 640x480
-                    if camera:
-                        print(f"    📷 Camera optimized: {prim.GetPath()}")
-            
-            # Reduce synthetic data update frequency (prevent frame drops)
-            settings = carb.settings.get_settings()
-            settings.set("/omni/replicator/RTSubframes", 1)  # Reduce subframes
-            settings.set("/omni/replicator/asyncRendering", True)  # Enable async
-            settings.set("/omni/syntheticdata/activateOnPlay", False)  # Manual trigger only
-            
-            print("    ⚡ Camera rendering optimized (manual trigger mode)")
-            
-        except Exception as e:
-            print(f"    ⚠️  Camera optimization: {e}")
-    
     def _apply_optimizations(self, stage):
         """Apply rendering optimizations"""
         settings = carb.settings.get_settings()
@@ -742,3 +591,158 @@ class LouvreSceneBuilderExtension(omni.ext.IExt):
         settings.set("/rtx/reflections/enabled", False)
         
         print("  ✅ Optimizations applied")
+
+    def _spawn_random_trash(self):
+        """Spawn random trash objects around the robot"""
+        import asyncio
+        asyncio.ensure_future(self._spawn_random_trash_async())
+    
+    async def _spawn_random_trash_async(self):
+        """Async spawn trash objects"""
+        import omni.usd
+        import random
+        import glob
+        import os
+        import math
+        from omni.kit.app import get_app
+        
+        try:
+            context = omni.usd.get_context()
+            stage = context.get_stage()
+            
+            if not stage:
+                self._update_status("❌ No stage", success=False)
+                return
+            
+            # Get robot position - try multiple paths
+            robot_prim = None
+            for path in ["/World/RidgebackFranka", "/RidgebackFranka"]:
+                prim = stage.GetPrimAtPath(path)
+                if prim.IsValid():
+                    robot_prim = prim
+                    break
+            
+            if not robot_prim:
+                self._update_status("❌ Robot not found", success=False)
+                return
+            
+            # Get robot world transform properly
+            robot_xform = UsdGeom.Xformable(robot_prim)
+            world_transform = robot_xform.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+            robot_x = world_transform.GetRow3(3)[0]
+            robot_y = world_transform.GetRow3(3)[1]
+            robot_z = world_transform.GetRow3(3)[2]  # Get robot z position (floor level)
+            
+            print(f"  🤖 Robot position: ({robot_x:.2f}, {robot_y:.2f}, {robot_z:.2f})")
+            
+            # Get USDZ files
+            usdz_files = glob.glob(os.path.join(self.TRASH_USDZ_DIR, "*.usdz"))
+            if not usdz_files:
+                self._update_status("❌ No USDZ files found", success=False)
+                return
+            
+            self._update_status("🗑️ Spawning trash...")
+            
+            # Create trash container
+            trash_root = "/World/Trash"
+            if not stage.GetPrimAtPath(trash_root):
+                UsdGeom.Xform.Define(stage, trash_root)
+            
+            # Spawn 3-5 random trash objects
+            num_trash = random.randint(3, 5)
+            spawned = 0
+            
+            for i in range(num_trash):
+                usdz_file = random.choice(usdz_files)
+                trash_name = os.path.splitext(os.path.basename(usdz_file))[0]
+                prim_path = f"{trash_root}/{trash_name}_{i}"
+                
+                # Random position around robot (1.5m ~ 3.5m away, in front)
+                distance = random.uniform(1.5, 3.5)
+                angle = random.uniform(-math.pi/2, math.pi/2)  # Front 180 degrees
+                x = robot_x + distance * math.cos(angle)
+                y = robot_y + distance * math.sin(angle)
+                z = robot_z  # Same floor level as robot
+                
+                # Random rotation
+                rot_z = random.uniform(0, 360)
+                
+                # Add reference
+                add_reference_to_stage(usd_path=usdz_file, prim_path=prim_path)
+                
+                # Set transform
+                prim = stage.GetPrimAtPath(prim_path)
+                if prim.IsValid():
+                    xform = UsdGeom.Xformable(prim)
+                    xform.ClearXformOpOrder()
+                    xform.AddTranslateOp().Set(Gf.Vec3d(x, y, z + 0.5))  # Start 0.5m above ground
+                    xform.AddRotateZOp().Set(rot_z)
+                    xform.AddScaleOp().Set(Gf.Vec3d(1.0, 1.0, 1.0))  # Original size
+                    
+                    # Add RigidBody for gravity
+                    if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                        UsdPhysics.RigidBodyAPI.Apply(prim)
+                    
+                    # Add mass
+                    if not prim.HasAPI(UsdPhysics.MassAPI):
+                        mass_api = UsdPhysics.MassAPI.Apply(prim)
+                        mass_api.CreateMassAttr().Set(0.5)  # 500g
+                    
+                    # Add collision with ConvexHull
+                    if not prim.HasAPI(UsdPhysics.CollisionAPI):
+                        UsdPhysics.CollisionAPI.Apply(prim)
+                    if not prim.HasAPI(UsdPhysics.MeshCollisionAPI):
+                        mesh_col = UsdPhysics.MeshCollisionAPI.Apply(prim)
+                        mesh_col.CreateApproximationAttr().Set("convexHull")
+                    
+                    spawned += 1
+                    print(f"  🗑️ Spawned: {trash_name} at ({x:.1f}, {y:.1f}, {z+0.5:.1f})")
+                
+                await get_app().next_update_async()
+            
+            self._update_status(f"✅ Spawned {spawned} trash objects")
+            
+        except Exception as e:
+            self._update_status(f"❌ Spawn error: {str(e)}", success=False)
+            carb.log_error(f"[LouvreSceneBuilder] Spawn error: {e}")
+    
+    def _clear_all_trash(self):
+        """Clear all spawned trash objects"""
+        try:
+            import omni.usd
+            context = omni.usd.get_context()
+            stage = context.get_stage()
+            
+            if not stage:
+                self._update_status("❌ No stage", success=False)
+                return
+            
+            trash_root = "/World/Trash"
+            trash_prim = stage.GetPrimAtPath(trash_root)
+            
+            if trash_prim.IsValid():
+                stage.RemovePrim(trash_root)
+                self._update_status("🧹 All trash cleared")
+            else:
+                self._update_status("ℹ️ No trash to clear")
+                
+        except Exception as e:
+            self._update_status(f"❌ Clear error: {str(e)}", success=False)
+
+    def _add_convex_collision_recursive(self, stage, prim):
+        """Add ConvexHull collision to all mesh children"""
+        from pxr import UsdGeom, UsdPhysics, PhysxSchema
+        
+        for child in Usd.PrimRange(prim):
+            if child.IsA(UsdGeom.Mesh):
+                # Add collision API
+                if not child.HasAPI(UsdPhysics.CollisionAPI):
+                    UsdPhysics.CollisionAPI.Apply(child)
+                
+                # Set mesh collision API with convex hull approximation
+                if not child.HasAPI(UsdPhysics.MeshCollisionAPI):
+                    mesh_collision = UsdPhysics.MeshCollisionAPI.Apply(child)
+                    mesh_collision.CreateApproximationAttr().Set("convexHull")
+                else:
+                    mesh_collision = UsdPhysics.MeshCollisionAPI(child)
+                    mesh_collision.CreateApproximationAttr().Set("convexHull")
